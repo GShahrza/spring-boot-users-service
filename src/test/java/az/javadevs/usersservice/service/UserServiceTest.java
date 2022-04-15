@@ -7,8 +7,7 @@ import az.javadevs.usersservice.dao.entity.UserEntity;
 import az.javadevs.usersservice.dao.repository.AccountRepository;
 import az.javadevs.usersservice.dao.repository.RoleRepository;
 import az.javadevs.usersservice.dao.repository.UserRepository;
-import az.javadevs.usersservice.dto.request.UserRequestDTO;
-import az.javadevs.usersservice.dto.response.UserResponseDTO;
+import az.javadevs.usersservice.exceptions.RoleNotFoundException;
 import az.javadevs.usersservice.exceptions.UserNotFoundException;
 import az.javadevs.usersservice.service.impl.UserServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,16 +16,18 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.dao.DuplicateKeyException;
 
-import java.util.Collections;
-import java.util.Optional;
+import java.util.*;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 public class UserServiceTest {
+
+    @Mock
+    private RoleRepository roleRepository;
 
     @Mock
     private UserRepository userRepository;
@@ -34,15 +35,12 @@ public class UserServiceTest {
     @Mock
     private AccountRepository accountRepository;
 
-    @Mock
-    private RoleRepository roleRepository;
-
-    @Mock
-    private PasswordEncoder encoder;
-
-    UserService userService;
+    @InjectMocks
+    private UserServiceImpl userService;
 
     RoleEntity role;
+
+    RoleEntity roleUser;
 
     Account account;
 
@@ -50,7 +48,14 @@ public class UserServiceTest {
 
     @BeforeEach
     void setMockOutput() {
+        Set<RoleEntity> roles = new HashSet<>();
+
         role = RoleEntity.builder()
+                .id(1L)
+                .roleName(Role.ROLE_ADMIN)
+                .build();
+        roles.add(role);
+        roleUser = RoleEntity.builder()
                 .id(3L)
                 .roleName(Role.ROLE_USER)
                 .build();
@@ -59,7 +64,7 @@ public class UserServiceTest {
                 .username("gshahrza")
                 .password("qweR1234*")
                 .email("gshahrza@gmail.com")
-                .roles(Collections.singleton(role))
+                .roles(roles)
                 .build();
         user = UserEntity.builder()
                 .id(1L)
@@ -67,8 +72,6 @@ public class UserServiceTest {
                 .lastName("Gahramanov")
                 .account(account)
                 .build();
-
-        userService = new UserServiceImpl(userRepository, accountRepository, roleRepository, encoder);
     }
 
     @Test
@@ -78,18 +81,52 @@ public class UserServiceTest {
     }
 
     @Test
+    public void getAllUsersTest() {
+        when(userRepository.findAll()).thenReturn(Collections.singletonList(user));
+        assertEquals(1, userService.getAllUsers().size());
+        assertEquals("gshahrza@gmail.com", userService.getAllUsers().get(0).getEmail());
+    }
+
+    @Test
+    public void addRoleToUserTest() {
+        when(accountRepository.findByUsername("gshahrza")).thenReturn(Optional.ofNullable(account));
+        when(roleRepository.findByRoleName(Role.ROLE_USER)).thenReturn(Optional.ofNullable(roleUser));
+        when(roleRepository.findByRoleName(Role.ROLE_ADMIN)).thenReturn(Optional.ofNullable(role));
+        when(accountRepository.save(account)).thenReturn(account);
+
+        assertAll(
+                () -> assertTrue(userService.addRoleToUser("gshahrza", "ROLE_USER")),
+                () -> assertThrows(IllegalArgumentException.class, () -> userService.addRoleToUser("gshahrza",
+                        "ROLE_OTHER")),
+                () -> assertThrows(UserNotFoundException.class, () -> userService.addRoleToUser("ex",
+                        "ROLE_USER")),
+                () -> assertThrows(DuplicateKeyException.class, () -> userService.addRoleToUser("gshahrza",
+                        "ROLE_ADMIN"))
+        );
+    }
+
+    @Test
+    public void removeFromUserTest() {
+        when(accountRepository.findByUsername("gshahrza")).thenReturn(Optional.ofNullable(account));
+        when(roleRepository.findByRoleName(Role.ROLE_USER)).thenReturn(Optional.ofNullable(roleUser));
+        when(roleRepository.findByRoleName(Role.ROLE_ADMIN)).thenReturn(Optional.ofNullable(role));
+        when(accountRepository.save(account)).thenReturn(account);
+
+        assertAll(
+                () -> assertThrows(RoleNotFoundException.class, () -> userService.removeFromUser("gshahrza", "ROLE_USER")),
+                () -> assertThrows(IllegalArgumentException.class, () -> userService.removeFromUser("gshahrza",
+                        "ROLE_OTHER")),
+                () -> assertThrows(UserNotFoundException.class, () -> userService.removeFromUser("ex",
+                        "ROLE_USER")),
+                () -> assertTrue(userService.removeFromUser("gshahrza",
+                        "ROLE_ADMIN"))
+        );
+    }
+
+    @Test
     public void getUserByUsernameTest() {
         when(accountRepository.findByUsername("gshahrza")).thenReturn(Optional.ofNullable(account));
         when(userRepository.findByAccountId(1L)).thenReturn(Optional.ofNullable(user));
         assertEquals(1L, userService.getUserByUsername("gshahrza").getId());
     }
-
-    @Test
-    public void getAllUsersTest(){
-        when(userRepository.findAll()).thenReturn(Collections.singletonList(user));
-        assertEquals(1,userService.getAllUsers().size());
-        assertEquals("gshahrza@gmail.com",userService.getAllUsers().get(0).getEmail());
-    }
-
-
 }
