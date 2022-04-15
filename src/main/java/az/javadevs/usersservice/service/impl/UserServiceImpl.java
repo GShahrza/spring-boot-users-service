@@ -1,40 +1,58 @@
 package az.javadevs.usersservice.service.impl;
 
-import az.javadevs.usersservice.dao.entity.Account;
 import az.javadevs.usersservice.dao.entity.Role;
-import az.javadevs.usersservice.dao.entity.RoleEntity;
+import az.javadevs.usersservice.dao.entity.Account;
 import az.javadevs.usersservice.dao.entity.UserEntity;
-import az.javadevs.usersservice.dao.repository.AccountRepository;
-import az.javadevs.usersservice.dao.repository.RoleRepository;
+import az.javadevs.usersservice.dao.entity.RoleEntity;
 import az.javadevs.usersservice.dao.repository.UserRepository;
+import az.javadevs.usersservice.dao.repository.RoleRepository;
+import az.javadevs.usersservice.dao.repository.AccountRepository;
+
 import az.javadevs.usersservice.dto.request.UserRequestDTO;
 import az.javadevs.usersservice.dto.response.UserResponseDTO;
-import az.javadevs.usersservice.exceptions.DuplicateRoleException;
-import az.javadevs.usersservice.exceptions.DuplicateUsernameException;
+
 import az.javadevs.usersservice.exceptions.RoleNotFoundException;
 import az.javadevs.usersservice.exceptions.UserNotFoundException;
+import az.javadevs.usersservice.exceptions.DuplicateRoleException;
+import az.javadevs.usersservice.exceptions.DuplicateUsernameException;
 import az.javadevs.usersservice.service.UserService;
-import lombok.AccessLevel;
-import lombok.RequiredArgsConstructor;
-import lombok.experimental.FieldDefaults;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
+
 
 import java.util.List;
 import java.util.stream.Collectors;
+
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
+
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class UserServiceImpl implements UserService {
 
+    final PasswordEncoder encoder;
+
+    final RoleRepository roleRepository;
+
     final UserRepository userRepository;
 
     final AccountRepository accountRepository;
 
-    final RoleRepository roleRepository;
+    @Override
+    public List<UserResponseDTO> getAllUsers() {
+        return userRepository.findAll().stream()
+                .map(UserResponseDTO::new)
+                .collect(Collectors.toList());
+    }
 
-    final PasswordEncoder encoder;
+    @Override
+    public UserResponseDTO getUserById(Long id) {
+        return new UserResponseDTO(userRepository.findById(id).orElseThrow(() ->
+                new UserNotFoundException("User not found")));
+    }
 
     @Override
     public Boolean addUser(UserRequestDTO userRequestDTO) {
@@ -63,6 +81,38 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    public UserResponseDTO getUserByUsername(String username) {
+        try {
+            Account account = accountRepository.findByUsername(username).orElseThrow();
+            return new UserResponseDTO(userRepository.findByAccountId(account.getId()).orElseThrow());
+        } catch (UserNotFoundException ex) {
+            throw new UserNotFoundException(String.format("Username: %s not found", username));
+        }
+    }
+
+    @Override
+    public Boolean addRoleToUser(String username, String roleName) {
+        Account account = getAccount(username);
+        RoleEntity role = getRole(roleName);
+        if (account.getRoles().add(role)) {
+            accountRepository.save(account);
+            return true;
+        }
+        throw new DuplicateRoleException("The role is already there!");
+    }
+
+    @Override
+    public Boolean removeFromUser(String username, String roleName) {
+        Account account = getAccount(username);
+        RoleEntity role = getRole(roleName);
+        if (account.getRoles().remove(role)) {
+            accountRepository.save(account);
+            return true;
+        }
+        throw new RoleNotFoundException("The user does not have this role");
+    }
+
+    @Override
     public Boolean updateUser(Long id, UserRequestDTO userRequestDTO) {
         try {
             getUserByIdAndByUsername(id, userRequestDTO.getUsername());
@@ -78,65 +128,14 @@ public class UserServiceImpl implements UserService {
         return true;
     }
 
-    @Override
-    public Boolean saveRole(RoleEntity role) {
-        roleRepository.save(role);
-        return true;
-    }
-
-    @Override
-    public Boolean addRoleToUser(String username, String roleName) {
-        Account account = getAccount(username);
-        RoleEntity role = getRole(roleName);
-        if (account.getRoles().add(role)) {
-            accountRepository.save(account);
-            return true;
-        }
-        throw new DuplicateRoleException("The role is already there!");
-    }
-
-    @Override
-    public UserResponseDTO getUserById(Long id) {
-        return new UserResponseDTO(userRepository.findById(id).orElseThrow(() ->
-                new UserNotFoundException("User not found")));
-    }
-
-    @Override
-    public UserResponseDTO getUserByUsername(String username) {
-        try{
-            Account account = accountRepository.findByUsername(username).orElseThrow();
-            return new UserResponseDTO(userRepository.findByAccountId(account.getId()).orElseThrow());
-        }catch (UserNotFoundException ex){
-            throw new UserNotFoundException(String.format("Username: %s not found", username));
-        }
-    }
-
-    @Override
-    public List<UserResponseDTO> getAllUsers() {
-        return userRepository.findAll().stream()
-                .map(UserResponseDTO::new)
-                .collect(Collectors.toList());
-    }
-
-    @Override
-    public Boolean removeFromUser(String username, String roleName) {
-        Account account = getAccount(username);
-        RoleEntity role = getRole(roleName);
-        if (account.getRoles().remove(role)) {
-            accountRepository.save(account);
-            return true;
-        }
-        throw new RoleNotFoundException("The user does not have this role");
+    private RoleEntity getRole(String roleName) {
+        return roleRepository.findByRoleName(Role.valueOf(roleName))
+                .orElseThrow(() -> new RoleNotFoundException(String.format("Role - %s not found", roleName)));
     }
 
     private Account getAccount(String username) {
         return accountRepository.findByUsername(username)
                 .orElseThrow(() -> new UserNotFoundException(String.format("Username: %s not found", username)));
-    }
-
-    private RoleEntity getRole(String roleName) {
-        return roleRepository.findByRoleName(Role.valueOf(roleName))
-                .orElseThrow(() -> new RoleNotFoundException(String.format("Role - %s not found", roleName)));
     }
 
     private Account getUserByIdAndByUsername(Long id, String username) {

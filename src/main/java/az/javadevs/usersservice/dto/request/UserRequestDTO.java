@@ -2,13 +2,11 @@ package az.javadevs.usersservice.dto.request;
 
 import az.javadevs.usersservice.exceptions.FieldNullPointerException;
 import az.javadevs.usersservice.exceptions.WrongFieldException;
-import lombok.AccessLevel;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import lombok.experimental.FieldDefaults;
 
 @Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
