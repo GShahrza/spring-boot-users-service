@@ -68,7 +68,7 @@ docker-compose down <- down docker compose
 
 ##### Role add to user :
 ```http
-  POST localhost:8080//roles/add-to-user
+  POST localhost:8080/roles/add-to-user
 ```
 | Parameter | Type     | allowed   |
 | :-------- | :------- |:---------- |
@@ -82,7 +82,7 @@ docker-compose down <- down docker compose
 `Example : ` `RequestBody : ` {"username" : "value","roleName" : "value"}
 ##### Role delete from user :
 ```http
-  POST localhost:8080//roles/add-to-user
+  POST localhost:8080/roles/add-to-user
 ```
 | Parameter | Type     | allowed   |
 | :-------- | :------- |:---------- |
